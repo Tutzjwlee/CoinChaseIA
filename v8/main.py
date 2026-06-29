@@ -38,6 +38,7 @@ def main():
 
     for episode in range(start_episode, EPISODES):
         agente.pos = mundo.posicao_vazia()
+        agente.definir_origem()
         agente.passos_parados = 0
         agente.contador_loop = 0
         agente.penalidade_loop_acumulada = 0.0
@@ -66,6 +67,8 @@ def main():
                     reward += PENALIDADE_PARADO * 0.5
             else:
                 agente.passos_parados = 0
+
+                reward += agente.recompensa_distancia_origem(nova_pos)
 
             if nova_pos == moeda.pos:
                 reward += CATCH_REWARD

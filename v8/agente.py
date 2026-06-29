@@ -6,7 +6,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from collections import deque
 from rede import DQN
-from config import LEARNING_RATE, BATCH_SIZE, MEMORY_SIZE, DISCOUNT, PENALIDADE_PARADO, VISUAL_RANGE
+from config import LEARNING_RATE, BATCH_SIZE, MEMORY_SIZE, DISCOUNT, PENALIDADE_PARADO, VISUAL_RANGE, ORIGEM_REWARD
 from labirinto import ACTIONS
 
 class Agente:
@@ -14,6 +14,7 @@ class Agente:
         self.labirinto = labirinto
         self.device = device
         self.pos = labirinto.posicao_vazia()
+        self.origem = None
         self.ultima_acao = -1
         self.passos_parados = 0
         self.historico_posicoes = deque(maxlen=20)
@@ -27,6 +28,19 @@ class Agente:
         self.target_net.eval()
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=LEARNING_RATE)
         self.memory = deque(maxlen=MEMORY_SIZE)
+
+    def definir_origem(self):
+        """Define o ponto de origem no início de um episódio."""
+        self.origem = tuple(self.pos)
+
+    def _distancia_manhattan(self, pos):
+        if self.origem is None:
+            return 0
+        return abs(pos[0] - self.origem[0]) + abs(pos[1] - self.origem[1])
+
+    def recompensa_distancia_origem(self, pos):
+        """Retorna recompensa pequena proporcional à distância de Manhattan da origem."""
+        return ORIGEM_REWARD * self._distancia_manhattan(pos)
 
     def _intensidade_cheiro(self, x, y, cheiro_matrix):
         if self.labirinto.eh_parede(x, y):
