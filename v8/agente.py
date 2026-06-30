@@ -17,6 +17,8 @@ class Agente:
         self.origem = None
         self.ultima_acao = -1
         self.passos_parados = 0
+        self.ultima_pos_registrada = None
+        self.passos_mesma_pos = 0
         self.historico_posicoes = deque(maxlen=20)
         self.penalidade_loop_acumulada = 0.0
         self.contador_loop = 0
@@ -32,6 +34,25 @@ class Agente:
     def definir_origem(self):
         """Define o ponto de origem no início de um episódio."""
         self.origem = tuple(self.pos)
+
+    def _verificar_redefinir_origem(self):
+        """Verifica se o agente ficou parado por 3 steps na mesma posição e redefine a origem."""
+        pos_atual = tuple(self.pos)
+        
+        if self.ultima_pos_registrada is None:
+            self.ultima_pos_registrada = pos_atual
+            self.passos_mesma_pos = 0
+            return
+        
+        if pos_atual == self.ultima_pos_registrada:
+            self.passos_mesma_pos += 1
+            if self.passos_mesma_pos >= 3:
+                self.origem = pos_atual
+                self.passos_mesma_pos = 0
+                print(f"Origem redefinida para {self.origem} (agente parado por 3 steps)")
+        else:
+            self.ultima_pos_registrada = pos_atual
+            self.passos_mesma_pos = 0
 
     def _distancia_manhattan(self, pos):
         if self.origem is None:
@@ -137,16 +158,19 @@ class Agente:
         dx, dy = ACTIONS[acao]
         nx, ny = self.pos[0] + dx, self.pos[1] + dy
         if self.labirinto.eh_parede(nx, ny):
+            self._verificar_redefinir_origem()
             return self.pos, True, 0.0
 
         nova_pos = [nx, ny]
         if self._detectar_loop(nova_pos):
             self.contador_loop += 1
             self.penalidade_loop_acumulada += 0.05
+            self._verificar_redefinir_origem()
             return nova_pos, False, -self.penalidade_loop_acumulada
         else:
             self.contador_loop = max(0, self.contador_loop - 1)
             self.penalidade_loop_acumulada = max(0, self.penalidade_loop_acumulada - 0.02)
+            self._verificar_redefinir_origem()
             return nova_pos, False, 0.0
 
     def armazenar_transicao(self, estado, acao, recompensa, novo_estado, done):
