@@ -6,7 +6,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from collections import deque
 from rede import DQN
-from config import LEARNING_RATE, BATCH_SIZE, MEMORY_SIZE, DISCOUNT, PENALIDADE_PARADO, VISUAL_RANGE
+from config import LEARNING_RATE, BATCH_SIZE, MEMORY_SIZE, DISCOUNT, PENALIDADE_PARADO, VISUAL_RANGE, ORIGEM_REWARD
 from labirinto import ACTIONS
 
 class Agente:
@@ -14,8 +14,11 @@ class Agente:
         self.labirinto = labirinto
         self.device = device
         self.pos = labirinto.posicao_vazia()
+        self.origem = None
         self.ultima_acao = -1
         self.passos_parados = 0
+        self.ultima_pos_registrada = None
+        self.passos_mesma_pos = 0
         self.historico_posicoes = deque(maxlen=20)
         self.penalidade_loop_acumulada = 0.0
         self.contador_loop = 0
@@ -27,6 +30,31 @@ class Agente:
         self.target_net.eval()
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=LEARNING_RATE)
         self.memory = deque(maxlen=MEMORY_SIZE)
+
+    # --- Ponto de origem (da branch feat--novo-labirinto) ---
+    def definir_origem(self):
+        """Define o ponto de origem no início de um episódio."""
+        self.origem = tuple(self.pos)
+        self.ultima_pos_registrada = None
+        self.passos_mesma_pos = 0
+
+    def _verificar_redefinir_origem(self, pos):
+        """Se o agente ficar 3 passos na mesma posição, ela vira a nova origem."""
+        pos_atual = tuple(pos)
+        if pos_atual == self.ultima_pos_registrada:
+            self.passos_mesma_pos += 1
+            if self.passos_mesma_pos >= 3:
+                self.origem = pos_atual
+                self.passos_mesma_pos = 0
+        else:
+            self.ultima_pos_registrada = pos_atual
+            self.passos_mesma_pos = 0
+
+    def recompensa_distancia_origem(self, pos):
+        """Recompensa pequena proporcional à distância de Manhattan da origem."""
+        if self.origem is None or ORIGEM_REWARD == 0:
+            return 0.0
+        return ORIGEM_REWARD * (abs(pos[0] - self.origem[0]) + abs(pos[1] - self.origem[1]))
 
     def _intensidade_cheiro(self, x, y, cheiro_matrix):
         if self.labirinto.eh_parede(x, y):
@@ -123,9 +151,11 @@ class Agente:
         dx, dy = ACTIONS[acao]
         nx, ny = self.pos[0] + dx, self.pos[1] + dy
         if self.labirinto.eh_parede(nx, ny):
+            self._verificar_redefinir_origem(self.pos)
             return self.pos, True, 0.0
 
         nova_pos = [nx, ny]
+        self._verificar_redefinir_origem(nova_pos)
         if self._detectar_loop(nova_pos):
             self.contador_loop += 1
             self.penalidade_loop_acumulada += 0.05

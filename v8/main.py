@@ -1,5 +1,6 @@
 # main.py - V8.1 (sem teleporte)
 import os
+import sys
 import time
 import numpy as np
 import torch
@@ -8,7 +9,8 @@ from IPython.display import clear_output
 from config import (
     EPISODES, MAX_STEPS, EPSILON_START, EPSILON_END, EPSILON_DECAY,
     COIN_MOVE_EVERY, CATCH_REWARD, PROGRESS_BONUS, PENALIDADE_PARADO,
-    CHECKPOINT_DIR, CHECKPOINT_INTERVAL, TARGET_UPDATE
+    CHECKPOINT_DIR, CHECKPOINT_INTERVAL, TARGET_UPDATE, MAPA,
+    CHECKPOINT_DIR_PADRAO, EPSILON_FINETUNE
 )
 from labirinto import Labirinto, MAZE
 from moeda import Moeda
@@ -19,6 +21,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Usando dispositivo: {device}")
     print(f"Versão: V8 - cheiro em todo o labirinto aka moeda fedida")
+    print(f"Mapa: {MAPA} ({len(MAZE)}x{len(MAZE)}) | MAX_STEPS={MAX_STEPS}")
     print(f"Checkpoints salvos em: {CHECKPOINT_DIR}/")
 
     mundo = Labirinto(MAZE)
@@ -28,16 +31,26 @@ def main():
     latest_checkpoint = os.path.join(CHECKPOINT_DIR, "checkpoint_latest.pth")
     epsilon = EPSILON_START
     start_episode = 0
+    base_checkpoint = os.path.join(CHECKPOINT_DIR_PADRAO, "checkpoint_latest.pth")
     if os.path.exists(latest_checkpoint):
         print("Carregando checkpoint existente...")
         epsilon, start_episode = agente.carregar_checkpoint(latest_checkpoint)
         print(f"Retomando do episódio {start_episode}, epsilon={epsilon:.3f}")
+    elif CHECKPOINT_DIR != CHECKPOINT_DIR_PADRAO and os.path.exists(base_checkpoint):
+        # Fine-tuning: só os pesos da rede do modelo 20x20 (memória e otimizador novos,
+        # porque as recompensas do mapa grande são outras)
+        base = torch.load(base_checkpoint, map_location=device, weights_only=False)
+        agente.policy_net.load_state_dict(base['policy_state_dict'])
+        agente.target_net.load_state_dict(base['policy_state_dict'])
+        epsilon = EPSILON_FINETUNE
+        print(f"Fine-tuning a partir de {base_checkpoint} (episódio {base.get('episode')}), epsilon={epsilon}")
 
     catches_history = []
     rewards_history = []
 
     for episode in range(start_episode, EPISODES):
         agente.pos = mundo.posicao_vazia()
+        agente.definir_origem()
         agente.passos_parados = 0
         agente.contador_loop = 0
         agente.penalidade_loop_acumulada = 0.0
@@ -66,6 +79,7 @@ def main():
                     reward += PENALIDADE_PARADO * 0.5
             else:
                 agente.passos_parados = 0
+                reward += agente.recompensa_distancia_origem(nova_pos)
 
             if nova_pos == moeda.pos:
                 reward += CATCH_REWARD
@@ -106,12 +120,18 @@ def main():
             agente.salvar_checkpoint(checkpoint_path, epsilon, episode+1)
             agente.salvar_checkpoint(latest_checkpoint, epsilon, episode+1)
 
-        if (episode + 1) % 100 == 0:
-            taxa = 100 * np.mean(catches_history[-100:])
-            print(f"Episódio {episode+1} | Captura (últ.100): {taxa:.1f}% | Epsilon: {epsilon:.3f}")
+        if (episode + 1) % CHECKPOINT_INTERVAL == 0:
+            n = CHECKPOINT_INTERVAL
+            taxa = 100 * np.mean(catches_history[-n:])
+            print(f"Episódio {episode+1} | Captura (últ.{n}): {taxa:.1f}% | Epsilon: {epsilon:.3f}", flush=True)
 
     print("Treinamento concluído!")
     agente.salvar_checkpoint(os.path.join(CHECKPOINT_DIR, "checkpoint_final.pth"), epsilon, EPISODES)
+
+    if not sys.stdout.isatty():
+        # rodando em segundo plano / com saída redirecionada: sem animação no console
+        plotar_taxa_captura(catches_history)
+        return
 
     print("\n--- Teste visual (política greedy) ---")
     agente.pos = mundo.posicao_vazia()

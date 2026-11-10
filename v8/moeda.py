@@ -32,7 +32,13 @@ class Moeda:
         return dist
 
     def atualizar_cheiro(self):
-        self.cheiro = self._bfs_cheiro()
+        # O mapa é fixo, então o cheiro só depende da posição da moeda:
+        # calcula a BFS uma vez por posição e reaproveita (não modificar o array retornado).
+        cache = self.labirinto.__dict__.setdefault("_cache_cheiro", {})
+        chave = tuple(self.pos)
+        if chave not in cache:
+            cache[chave] = self._bfs_cheiro()
+        self.cheiro = cache[chave]
 
     def mover(self):
         if self.direcao == -1:
