@@ -9,7 +9,7 @@ import os
 from config import MAX_STEPS, COIN_MOVE_EVERY, CHECKPOINT_DIR, CHECKPOINT_DIR_PADRAO, MAPA
 from labirinto import Labirinto, MAZE
 from moeda import Moeda
-from agente import Agente
+from agente import Agente, encontrar_modelo
 from colorama import Fore, Style
 
 # Configuração da figura
@@ -119,19 +119,18 @@ def main():
     mundo = Labirinto(MAZE)
     agente = Agente(mundo, device)
 
-    checkpoint_path = os.path.join(CHECKPOINT_DIR, "checkpoint_latest.pth")
-    if not os.path.exists(checkpoint_path):
-        # mapa sem modelo próprio ainda: usa o modelo treinado no mapa original
-        checkpoint_path = os.path.join(CHECKPOINT_DIR_PADRAO, "checkpoint_latest.pth")
+    # modelo leve (modelo.pth) primeiro; se o mapa ainda não tiver o seu, usa o do 20x20
+    checkpoint_path = (encontrar_modelo(CHECKPOINT_DIR, CHECKPOINT_DIR_PADRAO)
+                       or os.path.join(CHECKPOINT_DIR, "checkpoint_latest.pth"))
     print(f"Mapa: {MAPA} ({mundo.tamanho}x{mundo.tamanho})")
     if os.path.exists(checkpoint_path):
         try:
-            agente.carregar_checkpoint(checkpoint_path)
+            agente.carregar_pesos(checkpoint_path)
             print(f"Modelo carregado: {checkpoint_path}")
         except:
             final_path = os.path.join(CHECKPOINT_DIR, "checkpoint_final.pth")
             if os.path.exists(final_path):
-                agente.carregar_checkpoint(final_path)
+                agente.carregar_pesos(final_path)
                 print(f"Modelo carregado: {final_path}")
             else:
                 print("Nenhum checkpoint encontrado.")

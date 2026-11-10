@@ -10,7 +10,7 @@ import torch
 from config import MAX_STEPS, COIN_MOVE_EVERY, CHECKPOINT_DIR, CHECKPOINT_DIR_PADRAO, MAPA, SEMENTE
 from labirinto import Labirinto, MAZE
 from moeda import Moeda
-from agente import Agente
+from agente import Agente, encontrar_modelo
 
 
 def main():
@@ -20,10 +20,10 @@ def main():
 
     mundo = Labirinto(MAZE)
     agente = Agente(mundo, torch.device("cpu"))
-    caminho = os.path.join(CHECKPOINT_DIR, "checkpoint_latest.pth")
-    if not os.path.exists(caminho):
-        caminho = os.path.join(CHECKPOINT_DIR_PADRAO, "checkpoint_latest.pth")
-    _, ep = agente.carregar_checkpoint(caminho)
+    caminho = encontrar_modelo(CHECKPOINT_DIR, CHECKPOINT_DIR_PADRAO)
+    if caminho is None:
+        sys.exit(f"Nenhum modelo encontrado em {CHECKPOINT_DIR}/ (rode na raiz do repositório)")
+    ep = agente.carregar_pesos(caminho)
 
     nome = f"{MAPA} (semente {SEMENTE})" if MAPA == "grande_aleatorio" else MAPA
     print(f"Mapa: {nome} {mundo.tamanho}x{mundo.tamanho} | modelo: {caminho} (episódio {ep})")

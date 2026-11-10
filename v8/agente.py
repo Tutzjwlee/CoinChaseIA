@@ -1,4 +1,5 @@
 # agente.py - V8.1 (sem teleporte, com ação forçada)
+import os
 import numpy as np
 import random
 import torch
@@ -8,6 +9,20 @@ from collections import deque
 from rede import DQN
 from config import LEARNING_RATE, BATCH_SIZE, MEMORY_SIZE, DISCOUNT, PENALIDADE_PARADO, VISUAL_RANGE, ORIGEM_REWARD
 from labirinto import ACTIONS
+
+NOME_MODELO_LEVE = "modelo.pth"
+
+
+def encontrar_modelo(*pastas):
+    """Primeiro modelo que existir nas pastas, nesta ordem: modelo.pth (leve) e depois
+    checkpoint_latest.pth (completo). Retorna None se não houver nenhum."""
+    for pasta in pastas:
+        for nome in (NOME_MODELO_LEVE, "checkpoint_latest.pth"):
+            caminho = os.path.join(pasta, nome)
+            if os.path.exists(caminho):
+                return caminho
+    return None
+
 
 class Agente:
     def __init__(self, labirinto, device):
@@ -201,6 +216,25 @@ class Agente:
             'memory': self.memory,
         }, caminho)
         print(f"Checkpoint salvo em {caminho}")
+        if os.path.basename(caminho) == "checkpoint_latest.pth":
+            self.salvar_pesos(os.path.join(os.path.dirname(caminho), NOME_MODELO_LEVE), episode)
+
+    def salvar_pesos(self, caminho, episode):
+        """Versão leve (~45 KB): só os pesos da rede, sem memória de replay nem otimizador.
+        É o que a demo e os testes usam; abre com torch.load(weights_only=True) e qualquer numpy."""
+        torch.save({'policy_state_dict': self.policy_net.state_dict(), 'episode': int(episode)}, caminho)
+
+    def carregar_pesos(self, caminho):
+        """Carrega só a rede (para jogar, não para continuar o treino). Aceita o arquivo leve
+        ou um checkpoint completo. Retorna o episódio de treino do modelo."""
+        try:
+            dados = torch.load(caminho, map_location=self.device, weights_only=True)
+        except Exception:
+            # checkpoint completo: tem a memória de replay (arrays do numpy) junto
+            dados = torch.load(caminho, map_location=self.device, weights_only=False)
+        self.policy_net.load_state_dict(dados['policy_state_dict'])
+        self.target_net.load_state_dict(dados['policy_state_dict'])
+        return dados.get('episode')
 
     def carregar_checkpoint(self, caminho):
         checkpoint = torch.load(caminho, map_location=self.device, weights_only=False)

@@ -62,9 +62,9 @@ def caminho_modelo(nome_mapa, forcado=None):
     if forcado:
         return forcado
     pasta = "v8/models" if nome_mapa == "original" else "v8/models_grande"
-    caminho = os.path.join(pasta, "checkpoint_latest.pth")
-    if not os.path.exists(caminho):
-        caminho = os.path.join(config.CHECKPOINT_DIR_PADRAO, "checkpoint_latest.pth")
+    caminho = agente_mod.encontrar_modelo(pasta, config.CHECKPOINT_DIR_PADRAO)
+    if caminho is None:
+        sys.exit(f"Nenhum modelo encontrado em {pasta}/ (rode na raiz do repositório: python v8\\visualizar.py)")
     return caminho
 
 
@@ -171,8 +171,7 @@ class Demo:
         caminho = caminho_modelo(nome, self.args.modelo)
         if self.modelo_carregado != caminho or not hasattr(self, "agente"):
             self.agente = Agente(self.mundo, self.device)
-            _, self.ep_modelo = self.agente.carregar_checkpoint(caminho)
-            self.agente.memory.clear()
+            self.ep_modelo = self.agente.carregar_pesos(caminho)
             self.modelo_carregado = caminho
         self.agente.labirinto = self.mundo
         rotulo = NOMES.get(nome, nome) + (f" (semente {self.semente})" if nome == "grande_aleatorio" else "")
