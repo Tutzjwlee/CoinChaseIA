@@ -1,0 +1,5 @@
+torch>=2.0
+numpy>=2.0        # os checkpoints completos (usados para continuar o treino) foram salvos com numpy 2
+matplotlib>=3.7
+colorama>=0.4
+ipython>=8        # só o v8/main.py (treino) usa
